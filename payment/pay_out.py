@@ -110,15 +110,18 @@ async def get_payout_proof(reference):
     url = f"{os.getenv('FAUCET_LINK')}/get-withdrawals/{reference}"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:   
-                if resp.status_code == 200:
-                    result = resp.json
-                    tx_hash = result.get("transaction_hash")
-                    return f"https://explorer.snap-coin.net/tx/{tx_hash}"
-    
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    # get a list of transaction hashes and create an explorer link with each hash
+                    transactions = await resp.json() 
+                    return [
+                        f"https://explorer.snap-coin.net/tx/{tx['transaction_hash']}" 
+                        for tx in transactions
+                    ]
     except Exception as e: #pylint: disable=broad-except
-        logger.error("Failed to get transaction ID: %s", e)
-        return None
+        print(f"Error: {e}")
+        return []
+    return []   
     
 async def reset_balance(user_ids: list):
     db = os.getenv("REWARDS_DB", "rewards.db")
