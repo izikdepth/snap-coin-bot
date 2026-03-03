@@ -81,6 +81,8 @@ async def lottery_task(bot):
                 emoji = os.getenv("REWARD_EMOJI", "🎉")
                 winner_message_found = False
                 
+                general_channel = discord.utils.get(guild.text_channels, name="general")
+                
                 for text_channel in guild.text_channels:
                     try:
                         async for message in text_channel.history(limit=50):
@@ -90,7 +92,7 @@ async def lottery_task(bot):
                                 
                                 # check if user has connected wallet, if not prompt them to connect
                                 if not await is_user_address_connected(winner.id):
-                                    await text_channel.send(f"Congratulations {winner.mention}! You have won the lottery, but it looks like you haven't connected your wallet yet. Please use the /add_wallet command to connect your wallet address and receive your reward.")
+                                    await general_channel.send(f"Congratulations {winner.mention}! You have won the lottery, but it looks like you haven't connected your wallet yet. Please use the /add_wallet command to connect your wallet address and receive your reward.")
                             
                                 break
                             
@@ -120,7 +122,8 @@ async def lottery_task(bot):
 
 
 async def is_user_address_connected(user_id: int) -> bool:
-    db = os.getenv("WALLET_ADDRESS", "addresses.db")
+    db = os.getenv("REWARDS_DB", "rewards.db")
+    
     conn = None 
     try:
         conn = sqlite3.connect(db)
