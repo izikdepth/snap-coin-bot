@@ -8,15 +8,18 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 import logging
 
-
 load_dotenv("assets.env")
 
 active_users: set[int] = set()
+last_rewarded = {}
 
 logger = logging.getLogger('snap.lottery')
 
-
-def is_member_eligible_for_lottery(member: discord.Member, guild_id: int) -> bool:
+    
+def update_last_rewarded(user_id: int):
+    last_rewarded[user_id] = datetime.now(timezone.utc)   
+    
+def is_member_eligible_for_lottery(member: discord.Member, message: discord.Message, guild_id: int) -> bool:
     if member.bot:
         return False
     
@@ -25,6 +28,19 @@ def is_member_eligible_for_lottery(member: discord.Member, guild_id: int) -> boo
     
     if member.joined_at is None:
         return False
+    
+    # Only check message.type if message exists
+    if message is not None:
+        # ignore service messages eg joim ,boost, etc
+        if message.type in (
+            discord.MessageType.new_member,
+            discord.MessageType.premium_guild_subscription,
+            discord.MessageType.premium_guild_tier_1,
+            discord.MessageType.premium_guild_tier_2,
+            discord.MessageType.premium_guild_tier_3,
+        ):
+            return False
+    
 
     time_in_guild = datetime.now(timezone.utc) - member.joined_at
     
@@ -33,15 +49,22 @@ def is_member_eligible_for_lottery(member: discord.Member, guild_id: int) -> boo
 
 # track a user during this set lottery period
 def track_active_user(user_id: int):
-    active_users.add(user_id)
+    snapshot_time = int(os.getenv("SNAPSHOT_LOTTERY_TIME", "60"))
+    
+    last_time = last_rewarded.get(user_id)
+    now = datetime.now(timezone.utc)
+    
+    # Only track if user hasn't been rewarded in this interval
+    if last_time is None or (now - last_time) >= snapshot_time:
+        active_users.add(user_id)
     
 
-def get_active_eligible_users(guild: discord.Guild, guild_id: int) -> list[discord.Member]:
+def get_active_eligible_users(guild: discord.Guild, message: discord.Message,  guild_id: int) -> list[discord.Member]:
     eligible = []
     
     for user_id in active_users:
         member = guild.get_member(user_id)
-        if member and is_member_eligible_for_lottery(member, guild_id):
+        if member and is_member_eligible_for_lottery(member, message, guild_id):
             eligible.append(member)
     
     return eligible
@@ -68,11 +91,12 @@ async def lottery_task(bot):
                 await asyncio.sleep(60)
                 continue
         
-            # get eligible users for this period
-            eligible_users = get_active_eligible_users(guild, guild_id)
+            # get eligible users for this period (message=None because we're tracking joined_at for eligibility)
+            eligible_users = get_active_eligible_users(guild, None,  guild_id)
             
             if eligible_users:
                 winner = random.choice(eligible_users)
+                update_last_rewarded(winner.id)
                 
                 # Add reward to database
                 await add_reward_to_db(winner.id, "lottery", lottery_reward_amount)
