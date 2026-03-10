@@ -13,12 +13,6 @@ async def add_reward_to_db(user_id: int, reward_name: str, reward_amount: int):
         conn = sqlite3.connect(db)
         cursor = conn.cursor()
         
-        cursor.execute('''CREATE TABLE IF NOT EXISTS rewards
-                          (user_id INTEGER, 
-                           reward_name TEXT, 
-                           reward_amount INTEGER,
-                           PRIMARY KEY (user_id, reward_name))''')
-        
         cursor.execute('''INSERT INTO rewards (user_id, reward_name, reward_amount)
                           VALUES (?, ?, ?)
                           ON CONFLICT(user_id, reward_name) 
